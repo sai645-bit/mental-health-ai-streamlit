@@ -19,7 +19,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -----------------------------
-# Title (ONLY ONCE)
+# Title
 # -----------------------------
 st.markdown('<div class="title">🧠 AI Mental Health Monitoring System</div>', unsafe_allow_html=True)
 st.write("Multimodal analysis using voice and wearable data")
@@ -49,14 +49,18 @@ def extract_voice_features(audio_path, n_mfcc=13):
     return np.hstack((mfcc_mean, pitch_mean, energy_mean))
 
 # -----------------------------
-# UI: Upload Inputs
+# UI: Upload Inputs (COLUMNS)
 # -----------------------------
-st.markdown('<div class="section">🎙 Step 1: Upload Voice Sample</div>', unsafe_allow_html=True)
-audio_file = st.file_uploader("Upload a WAV audio file", type=["wav"])
+col1, col2 = st.columns(2)
 
-st.markdown('<div class="section">⌚ Step 2: Upload Wearable Data</div>', unsafe_allow_html=True)
-st.markdown("Expected columns: **heart_rate, eda, activity, sleep_hours**")
-wearable_file = st.file_uploader("Upload wearable CSV file", type=["csv"])
+with col1:
+    st.markdown('<div class="section">🎙 Voice Input</div>', unsafe_allow_html=True)
+    audio_file = st.file_uploader("Upload WAV audio", type=["wav"])
+
+with col2:
+    st.markdown('<div class="section">⌚ Wearable Data</div>', unsafe_allow_html=True)
+    st.caption("Expected columns: heart_rate, eda, activity, sleep_hours")
+    wearable_file = st.file_uploader("Upload CSV file", type=["csv"])
 
 # -----------------------------
 # Predict Button
@@ -71,43 +75,62 @@ if st.button("🔍 Predict Mental Health Risk"):
 
     else:
         try:
-            # Voice features
-            with open("temp_audio.wav", "wb") as f:
-                f.write(audio_file.read())
+            with st.spinner("Analyzing voice and wearable data..."):
 
-            voice_features = extract_voice_features("temp_audio.wav")
+                # ---- Voice Features ----
+                with open("temp_audio.wav", "wb") as f:
+                    f.write(audio_file.read())
 
-            # Wearable features
-            wearable_df = pd.read_csv(wearable_file)
-            wearable_features = wearable_df.drop('label', axis=1, errors='ignore').iloc[0].values
+                voice_features = extract_voice_features("temp_audio.wav")
 
-            # Fusion
-            final_input = np.hstack((voice_features, wearable_features)).reshape(1, -1)
+                # ---- Wearable Features ----
+                wearable_df = pd.read_csv(wearable_file)
+                wearable_features = wearable_df.drop(
+                    'label', axis=1, errors='ignore'
+                ).iloc[0].values
 
-            # Prediction
-            prediction = model.predict(final_input)[0]
-            confidence = model.predict_proba(final_input).max()
+                # ---- Multimodal Fusion ----
+                final_input = np.hstack((voice_features, wearable_features)).reshape(1, -1)
 
-            # Result
-            st.markdown('<div class="box">', unsafe_allow_html=True)
-            if prediction == 1:
-                st.error("⚠ Mental Health Risk: HIGH")
-            else:
-                st.success("✅ Mental Health Risk: LOW")
-            st.info(f"Confidence: {confidence:.2f}")
-            st.markdown('</div>', unsafe_allow_html=True)
+                # ---- Prediction ----
+                prediction = model.predict(final_input)[0]
+                confidence = model.predict_proba(final_input).max()
 
-            # Anxiety vs Depression
-            heart_rate, eda, activity, sleep = wearable_features
+                # ---- Anxiety vs Depression (Rule-Based) ----
+                heart_rate, eda, activity, sleep = wearable_features
 
-            anxiety_score = int(heart_rate > 85) + int(eda > 2.5)
-            depression_score = int(activity < 2000) + int(sleep < 6)
+                anxiety_score = int(heart_rate > 85) + int(eda > 2.5)
+                depression_score = int(activity < 2000) + int(sleep < 6)
 
+                anxiety_level = "HIGH" if anxiety_score >= 2 else "LOW"
+                depression_level = "HIGH" if depression_score >= 2 else "LOW"
+
+            # -----------------------------
+            # Prediction Summary (METRICS)
+            # -----------------------------
+            st.markdown('<div class="section">📊 Prediction Summary</div>', unsafe_allow_html=True)
+
+            m1, m2, m3 = st.columns(3)
+
+            with m1:
+                st.metric("Overall Risk", "HIGH" if prediction == 1 else "LOW")
+
+            with m2:
+                st.metric("Confidence", f"{confidence:.2f}")
+
+            with m3:
+                st.metric("Anxiety Risk", anxiety_level)
+
+            # -----------------------------
+            # Risk Breakdown
+            # -----------------------------
             st.markdown('<div class="section">🧠 Risk Breakdown</div>', unsafe_allow_html=True)
-            st.write(f"**Anxiety Risk:** {'HIGH' if anxiety_score >= 2 else 'LOW'}")
-            st.write(f"**Depression Risk:** {'HIGH' if depression_score >= 2 else 'LOW'}")
+            st.write(f"**Anxiety Risk:** {anxiety_level}")
+            st.write(f"**Depression Risk:** {depression_level}")
 
-            # Feature Importance
+            # -----------------------------
+            # Feature Importance (EXPANDER)
+            # -----------------------------
             feature_names = [f"Voice_Feature_{i+1}" for i in range(15)] + \
                             ["Heart Rate", "EDA", "Activity", "Sleep"]
 
@@ -116,18 +139,32 @@ if st.button("🔍 Predict Mental Health Risk"):
                 "Importance": model.feature_importances_
             }).sort_values(by="Importance", ascending=False)
 
-            st.markdown('<div class="section">🔍 Feature Importance</div>', unsafe_allow_html=True)
-            st.dataframe(importance_df.head(5))
+            with st.expander("🔍 Feature Importance (Explainable AI)"):
+                st.dataframe(importance_df.head(5))
 
-            # Trend Analysis
+            # -----------------------------
+            # Trend Analysis (EXPANDER)
+            # -----------------------------
             if len(wearable_df) > 1:
-                st.markdown('<div class="section">📈 Risk Trend Over Time</div>', unsafe_allow_html=True)
-                trend_scores = []
-                for i in range(len(wearable_df)):
-                    wf = wearable_df.drop('label', axis=1, errors='ignore').iloc[i].values
-                    combined = np.hstack((voice_features, wf)).reshape(1, -1)
-                    trend_scores.append(model.predict_proba(combined)[0][1])
-                st.line_chart(trend_scores)
+                with st.expander("📈 Mental Health Risk Trend Over Time"):
+                    trend_scores = []
+                    for i in range(len(wearable_df)):
+                        wf = wearable_df.drop(
+                            'label', axis=1, errors='ignore'
+                        ).iloc[i].values
+                        combined = np.hstack((voice_features, wf)).reshape(1, -1)
+                        trend_scores.append(model.predict_proba(combined)[0][1])
+
+                    st.line_chart(trend_scores)
+
+            # -----------------------------
+            # Disclaimer
+            # -----------------------------
+            st.markdown("---")
+            st.caption(
+                "⚠ Disclaimer: This application is for educational and research purposes only. "
+                "It is not a medical diagnostic tool."
+            )
 
         except Exception as e:
             st.error("An error occurred while processing your inputs.")
