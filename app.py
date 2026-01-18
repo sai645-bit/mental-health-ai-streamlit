@@ -6,7 +6,7 @@ import librosa
 import os
 
 # -----------------------------
-# Custom UI Styling
+# Page Configuration & Styling
 # -----------------------------
 st.set_page_config(page_title="AI Mental Health Monitor", layout="centered")
 
@@ -18,18 +18,14 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="title">🧠 AI Mental Health Monitoring System</div>', unsafe_allow_html=True)
-st.write("Multimodal analysis using voice and wearable data")
-
-
 # -----------------------------
-# Title
+# Title (ONLY ONCE)
 # -----------------------------
 st.markdown('<div class="title">🧠 AI Mental Health Monitoring System</div>', unsafe_allow_html=True)
 st.write("Multimodal analysis using voice and wearable data")
 
 # -----------------------------
-# Load trained fusion model (SAFE PATH)
+# Load trained fusion model
 # -----------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "fusion_model.pkl")
@@ -50,8 +46,7 @@ def extract_voice_features(audio_path, n_mfcc=13):
     energy = librosa.feature.rms(y=y)
     energy_mean = np.mean(energy)
 
-    features = np.hstack((mfcc_mean, pitch_mean, energy_mean))
-    return features  # 15 features
+    return np.hstack((mfcc_mean, pitch_mean, energy_mean))
 
 # -----------------------------
 # UI: Upload Inputs
@@ -76,95 +71,62 @@ if st.button("🔍 Predict Mental Health Risk"):
 
     else:
         try:
-            # ---- Voice Feature Extraction ----
+            # Voice features
             with open("temp_audio.wav", "wb") as f:
                 f.write(audio_file.read())
 
             voice_features = extract_voice_features("temp_audio.wav")
 
-            # ---- Wearable Data ----
+            # Wearable features
             wearable_df = pd.read_csv(wearable_file)
+            wearable_features = wearable_df.drop('label', axis=1, errors='ignore').iloc[0].values
 
-            if 'label' in wearable_df.columns:
-                wearable_features = wearable_df.drop('label', axis=1).iloc[0].values
-            else:
-                wearable_features = wearable_df.iloc[0].values
-
-            # ---- Multimodal Fusion ----
+            # Fusion
             final_input = np.hstack((voice_features, wearable_features)).reshape(1, -1)
 
-            # ---- Prediction ----
+            # Prediction
             prediction = model.predict(final_input)[0]
             confidence = model.predict_proba(final_input).max()
 
-            # -----------------------------
-            # Result Display
-            # -----------------------------
+            # Result
             st.markdown('<div class="box">', unsafe_allow_html=True)
-
             if prediction == 1:
                 st.error("⚠ Mental Health Risk: HIGH")
             else:
                 st.success("✅ Mental Health Risk: LOW")
-
             st.info(f"Confidence: {confidence:.2f}")
             st.markdown('</div>', unsafe_allow_html=True)
 
-            # -----------------------------
-            # Anxiety vs Depression (Rule-Based)
-            # -----------------------------
-            heart_rate = wearable_features[0]
-            eda = wearable_features[1]
-            activity = wearable_features[2]
-            sleep = wearable_features[3]
+            # Anxiety vs Depression
+            heart_rate, eda, activity, sleep = wearable_features
 
-            anxiety_score = 0
-            depression_score = 0
-
-            if heart_rate > 85:
-                anxiety_score += 1
-            if eda > 2.5:
-                anxiety_score += 1
-
-            if activity < 2000:
-                depression_score += 1
-            if sleep < 6:
-                depression_score += 1
-
-            anxiety_level = "HIGH" if anxiety_score >= 2 else "LOW"
-            depression_level = "HIGH" if depression_score >= 2 else "LOW"
+            anxiety_score = int(heart_rate > 85) + int(eda > 2.5)
+            depression_score = int(activity < 2000) + int(sleep < 6)
 
             st.markdown('<div class="section">🧠 Risk Breakdown</div>', unsafe_allow_html=True)
-            st.write(f"**Anxiety Risk:** {anxiety_level}")
-            st.write(f"**Depression Risk:** {depression_level}")
+            st.write(f"**Anxiety Risk:** {'HIGH' if anxiety_score >= 2 else 'LOW'}")
+            st.write(f"**Depression Risk:** {'HIGH' if depression_score >= 2 else 'LOW'}")
 
-            # -----------------------------
-            # Feature Importance (Explainable AI)
-            # -----------------------------
-            voice_feature_names = [f"Voice_Feature_{i+1}" for i in range(15)]
-            wearable_feature_names = ["Heart Rate", "EDA", "Activity", "Sleep"]
-            all_feature_names = voice_feature_names + wearable_feature_names
+            # Feature Importance
+            feature_names = [f"Voice_Feature_{i+1}" for i in range(15)] + \
+                            ["Heart Rate", "EDA", "Activity", "Sleep"]
 
             importance_df = pd.DataFrame({
-                "Feature": all_feature_names,
+                "Feature": feature_names,
                 "Importance": model.feature_importances_
             }).sort_values(by="Importance", ascending=False)
 
             st.markdown('<div class="section">🔍 Feature Importance</div>', unsafe_allow_html=True)
             st.dataframe(importance_df.head(5))
 
-            # -----------------------------
             # Trend Analysis
-            # -----------------------------
             if len(wearable_df) > 1:
                 st.markdown('<div class="section">📈 Risk Trend Over Time</div>', unsafe_allow_html=True)
-
                 trend_scores = []
                 for i in range(len(wearable_df)):
                     wf = wearable_df.drop('label', axis=1, errors='ignore').iloc[i].values
                     combined = np.hstack((voice_features, wf)).reshape(1, -1)
                     trend_scores.append(model.predict_proba(combined)[0][1])
-
                 st.line_chart(trend_scores)
 
         except Exception as e:
