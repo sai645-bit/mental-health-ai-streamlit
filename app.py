@@ -49,13 +49,16 @@ def extract_voice_features(audio_path, n_mfcc=13):
     return np.hstack((mfcc_mean, pitch_mean, energy_mean))
 
 # -----------------------------
-# UI: Upload Inputs (COLUMNS)
+# UI: Upload Inputs
 # -----------------------------
 col1, col2 = st.columns(2)
 
 with col1:
     st.markdown('<div class="section">🎙 Voice Input</div>', unsafe_allow_html=True)
-    audio_file = st.file_uploader("Upload WAV audio", type=["wav"])
+    audio_file = st.file_uploader(
+        "Upload voice file",
+        type=["wav", "ogg", "mp3", "m4a"]
+    )
 
 with col2:
     st.markdown('<div class="section">⌚ Wearable Data</div>', unsafe_allow_html=True)
@@ -68,7 +71,7 @@ with col2:
 if st.button("🔍 Predict Mental Health Risk"):
 
     if audio_file is None:
-        st.warning("Please upload a voice audio file (.wav).")
+        st.warning("Please upload a voice audio file.")
 
     elif wearable_file is None:
         st.warning("Please upload a wearable CSV file.")
@@ -77,13 +80,17 @@ if st.button("🔍 Predict Mental Health Risk"):
         try:
             with st.spinner("Analyzing voice and wearable data..."):
 
-                # ---- Voice Features ----
-                with open("temp_audio.wav", "wb") as f:
+                # ---- Save uploaded audio with original extension ----
+                file_extension = audio_file.name.split(".")[-1]
+                temp_audio_path = f"temp_audio.{file_extension}"
+
+                with open(temp_audio_path, "wb") as f:
                     f.write(audio_file.read())
 
-                voice_features = extract_voice_features("temp_audio.wav")
+                # ---- Voice Feature Extraction ----
+                voice_features = extract_voice_features(temp_audio_path)
 
-                # ---- Wearable Features ----
+                # ---- Wearable Feature Extraction ----
                 wearable_df = pd.read_csv(wearable_file)
                 wearable_features = wearable_df.drop(
                     'label', axis=1, errors='ignore'
@@ -106,7 +113,7 @@ if st.button("🔍 Predict Mental Health Risk"):
                 depression_level = "HIGH" if depression_score >= 2 else "LOW"
 
             # -----------------------------
-            # Prediction Summary (METRICS)
+            # Prediction Summary
             # -----------------------------
             st.markdown('<div class="section">📊 Prediction Summary</div>', unsafe_allow_html=True)
 
@@ -129,7 +136,7 @@ if st.button("🔍 Predict Mental Health Risk"):
             st.write(f"**Depression Risk:** {depression_level}")
 
             # -----------------------------
-            # Feature Importance (EXPANDER)
+            # Feature Importance
             # -----------------------------
             feature_names = [f"Voice_Feature_{i+1}" for i in range(15)] + \
                             ["Heart Rate", "EDA", "Activity", "Sleep"]
@@ -143,7 +150,7 @@ if st.button("🔍 Predict Mental Health Risk"):
                 st.dataframe(importance_df.head(5))
 
             # -----------------------------
-            # Trend Analysis (EXPANDER)
+            # Trend Analysis
             # -----------------------------
             if len(wearable_df) > 1:
                 with st.expander("📈 Mental Health Risk Trend Over Time"):
