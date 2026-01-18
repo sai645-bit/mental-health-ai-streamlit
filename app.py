@@ -6,11 +6,6 @@ import librosa
 import os
 
 # -----------------------------
-# Page Configuration
-# -----------------------------
-st.set_page_config(page_title="AI Mental Health Monitor", layout="centered")
-
-# -----------------------------
 # Custom UI Styling
 # -----------------------------
 st.set_page_config(page_title="AI Mental Health Monitor", layout="centered")
