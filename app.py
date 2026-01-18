@@ -13,6 +13,8 @@ st.set_page_config(page_title="AI Mental Health Monitor", layout="centered")
 # -----------------------------
 # Custom UI Styling
 # -----------------------------
+st.set_page_config(page_title="AI Mental Health Monitor", layout="centered")
+
 st.markdown("""
 <style>
 .title {font-size:28px; font-weight:700; margin-bottom:10px;}
@@ -20,6 +22,10 @@ st.markdown("""
 .box {padding:15px; border-radius:10px; background-color:#f0f2f6; margin-top:10px;}
 </style>
 """, unsafe_allow_html=True)
+
+st.markdown('<div class="title">🧠 AI Mental Health Monitoring System</div>', unsafe_allow_html=True)
+st.write("Multimodal analysis using voice and wearable data")
+
 
 # -----------------------------
 # Title
