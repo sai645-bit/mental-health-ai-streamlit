@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.pyc
+*.pkl
+temp.wav
+doctor.wav
+doctor_features.npy

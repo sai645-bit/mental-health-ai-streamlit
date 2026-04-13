@@ -1,0 +1,11 @@
+streamlit
+numpy
+pandas
+joblib
+librosa
+soundfile
+matplotlib
+plotly
+scikit-learn
+streamlit-webrtc
+av
