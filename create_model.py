@@ -10,4 +10,4 @@ model.fit(X, y)
 
 joblib.dump(model, "fusion_model.pkl")
 
-print("✅ New compatible model created")
+print("✅ Compatible model ready")
