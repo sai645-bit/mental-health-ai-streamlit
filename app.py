@@ -51,7 +51,7 @@ class AudioProcessor(AudioProcessorBase):
         return frame
 
 # -----------------------------
-# Voice Feature Extraction
+# Feature Extraction
 # -----------------------------
 def extract_voice_features(audio_path):
     y, sr = librosa.load(audio_path, sr=None)
@@ -65,8 +65,7 @@ def extract_voice_features(audio_path):
     energy = librosa.feature.rms(y=y)
     energy_mean = np.mean(energy)
 
-    features = np.hstack((mfcc_mean, pitch_mean, energy_mean))
-    return features, y, sr, mfcc, pitch, energy
+    return np.hstack((mfcc_mean, pitch_mean, energy_mean)), y, sr, mfcc, pitch, energy
 
 # -----------------------------
 # Speaker Similarity
@@ -79,14 +78,55 @@ def compute_similarity(f1, f2):
 # -----------------------------
 col1, col2 = st.columns(2)
 
+# -----------------------------
+# 🎙 INPUT MODES
+# -----------------------------
 with col1:
     st.markdown('<div class="section">🎙 Voice Input</div>', unsafe_allow_html=True)
 
-    webrtc_ctx = webrtc_streamer(
-        key="audio",
-        audio_processor_factory=AudioProcessor,
-        media_stream_constraints={"audio": True, "video": False},
+    input_mode = st.radio(
+        "Choose Input Method",
+        ["🎙 Microphone", "📁 Upload File", "🎧 Sample Audio"]
     )
+
+    temp_path = None
+    webrtc_ctx = None
+
+    # 🎙 MIC
+    if input_mode == "🎙 Microphone":
+        webrtc_ctx = webrtc_streamer(
+            key="audio",
+            audio_processor_factory=AudioProcessor,
+            media_stream_constraints={
+                "audio": {
+                    "echoCancellation": True,
+                    "noiseSuppression": True,
+                    "autoGainControl": True,
+                },
+                "video": False,
+            },
+        )
+
+        if webrtc_ctx.audio_processor and len(webrtc_ctx.audio_processor.audio_frames) > 0:
+            audio_data = np.array(webrtc_ctx.audio_processor.audio_frames, dtype=np.float32)
+            audio_data = audio_data / np.max(np.abs(audio_data))
+
+            temp_path = "temp.wav"
+            sf.write(temp_path, audio_data, 16000)
+
+    # 📁 UPLOAD
+    elif input_mode == "📁 Upload File":
+        uploaded_file = st.file_uploader("Upload voice file", type=["wav", "mp3", "ogg"])
+
+        if uploaded_file:
+            temp_path = "temp.wav"
+            with open(temp_path, "wb") as f:
+                f.write(uploaded_file.read())
+
+    # 🎧 SAMPLE
+    elif input_mode == "🎧 Sample Audio":
+        st.info("Using sample audio")
+        temp_path = "sample.wav"
 
     st.info("Step 1: Register doctor voice → Step 2: Patient speaks")
 
@@ -94,29 +134,20 @@ with col1:
     # Register Doctor Voice
     # -----------------------------
     if st.button("🎙 Register Doctor Voice"):
-        if webrtc_ctx.audio_processor and len(webrtc_ctx.audio_processor.audio_frames) > 0:
-            audio_data = np.array(webrtc_ctx.audio_processor.audio_frames, dtype=np.float32)
-
-            audio_data = audio_data / np.max(np.abs(audio_data))
-            sf.write("doctor.wav", audio_data, 16000)
-
-            doctor_feat, *_ = extract_voice_features("doctor.wav")
+        if temp_path:
+            doctor_feat, *_ = extract_voice_features(temp_path)
             np.save("doctor_features.npy", doctor_feat)
-
-            st.success("Doctor voice registered successfully")
+            st.success("Doctor voice registered")
         else:
-            st.warning("Record doctor voice first")
+            st.warning("Provide audio first")
 
+# -----------------------------
+# Wearable
+# -----------------------------
 with col2:
     st.markdown('<div class="section">⌚ Wearable Data</div>', unsafe_allow_html=True)
 
-    option = st.selectbox("Scenario", [
-        "Normal",
-        "Stress",
-        "Anxiety",
-        "Depression",
-        "Custom"
-    ])
+    option = st.selectbox("Scenario", ["Normal", "Stress", "Anxiety", "Depression", "Custom"])
 
     if option == "Normal":
         hr, eda, act, sleep = 72, 1.2, 3500, 7.5
@@ -139,41 +170,27 @@ wearable = np.array([hr, eda, act, sleep])
 # -----------------------------
 if st.button("🔍 Predict"):
 
-    if webrtc_ctx.audio_processor is None or len(webrtc_ctx.audio_processor.audio_frames) == 0:
-        st.warning("Please record voice first")
+    if not temp_path:
+        st.warning("Please provide audio input")
     else:
         try:
-            audio_data = np.array(webrtc_ctx.audio_processor.audio_frames, dtype=np.float32)
-            audio_data = audio_data / np.max(np.abs(audio_data))
-
-            temp_path = "temp.wav"
-            sf.write(temp_path, audio_data, 16000)
-
             voice_feat, y, sr, mfcc, pitch, energy = extract_voice_features(temp_path)
 
-            # -----------------------------
             # Speaker Filter
-            # -----------------------------
             if os.path.exists("doctor_features.npy"):
                 doctor_feat = np.load("doctor_features.npy")
-
                 similarity = compute_similarity(voice_feat, doctor_feat)
 
                 if similarity < 50:
-                    st.error("Doctor voice detected — please record patient voice")
+                    st.error("Doctor voice detected — use patient voice")
                     st.stop()
 
-            # -----------------------------
-            # Prediction
-            # -----------------------------
             final = np.hstack((voice_feat, wearable)).reshape(1, -1)
 
             pred = model.predict(final)[0]
             conf = model.predict_proba(final).max()
 
-            # -----------------------------
             # Dashboard
-            # -----------------------------
             st.markdown("## 📊 Dashboard")
 
             c1, c2, c3 = st.columns(3)
@@ -181,12 +198,10 @@ if st.button("🔍 Predict"):
             c2.metric("Confidence", f"{conf:.2f}")
             c3.metric("HR", hr)
 
-            # -----------------------------
             # Gauge
-            # -----------------------------
             fig = go.Figure(go.Indicator(
                 mode="gauge+number",
-                value=conf*100,
+                value=conf * 100,
                 title={'text': "Risk Score"},
                 gauge={
                     'axis': {'range': [0, 100]},
@@ -199,9 +214,7 @@ if st.button("🔍 Predict"):
             ))
             st.plotly_chart(fig)
 
-            # -----------------------------
             # Explainability
-            # -----------------------------
             st.markdown("## 🧠 Voice Explainability")
 
             fig_mfcc, ax = plt.subplots()
@@ -215,9 +228,7 @@ if st.button("🔍 Predict"):
             ax2.legend()
             st.pyplot(fig2)
 
-            # -----------------------------
             # Insight
-            # -----------------------------
             st.markdown("## 🧠 AI Insight")
 
             if pred:
