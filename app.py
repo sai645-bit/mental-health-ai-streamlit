@@ -11,9 +11,6 @@ import soundfile as sf
 from streamlit_webrtc import webrtc_streamer, AudioProcessorBase
 import av
 
-# -----------------------------
-# Page Config
-# -----------------------------
 st.set_page_config(page_title="AI Mental Health Monitor", layout="centered")
 
 st.markdown("""
@@ -26,9 +23,6 @@ st.markdown("""
 
 st.markdown('<div class="title">🧠 AI Mental Health Monitoring System</div>', unsafe_allow_html=True)
 
-# -----------------------------
-# Load Model
-# -----------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "fusion_model.pkl")
 
@@ -38,9 +32,6 @@ def load_model():
 
 model = load_model()
 
-# -----------------------------
-# Audio Processor
-# -----------------------------
 class AudioProcessor(AudioProcessorBase):
     def __init__(self):
         self.audio_frames = []
@@ -50,9 +41,6 @@ class AudioProcessor(AudioProcessorBase):
         self.audio_frames.extend(audio)
         return frame
 
-# -----------------------------
-# Feature Extraction
-# -----------------------------
 def extract_voice_features(audio_path):
     y, sr = librosa.load(audio_path, sr=None)
 
@@ -67,20 +55,11 @@ def extract_voice_features(audio_path):
 
     return np.hstack((mfcc_mean, pitch_mean, energy_mean)), y, sr, mfcc, pitch, energy
 
-# -----------------------------
-# Speaker Similarity
-# -----------------------------
 def compute_similarity(f1, f2):
     return np.linalg.norm(f1 - f2)
 
-# -----------------------------
-# UI Layout
-# -----------------------------
 col1, col2 = st.columns(2)
 
-# -----------------------------
-# 🎙 INPUT MODES
-# -----------------------------
 with col1:
     st.markdown('<div class="section">🎙 Voice Input</div>', unsafe_allow_html=True)
 
@@ -92,7 +71,6 @@ with col1:
     temp_path = None
     webrtc_ctx = None
 
-    # 🎙 MIC
     if input_mode == "🎙 Microphone":
         webrtc_ctx = webrtc_streamer(
             key="audio",
@@ -114,7 +92,6 @@ with col1:
             temp_path = "temp.wav"
             sf.write(temp_path, audio_data, 16000)
 
-    # 📁 UPLOAD
     elif input_mode == "📁 Upload File":
         uploaded_file = st.file_uploader("Upload voice file", type=["wav", "mp3", "ogg"])
 
@@ -123,16 +100,12 @@ with col1:
             with open(temp_path, "wb") as f:
                 f.write(uploaded_file.read())
 
-    # 🎧 SAMPLE
     elif input_mode == "🎧 Sample Audio":
         st.info("Using sample audio")
         temp_path = "sample.wav"
 
     st.info("Step 1: Register doctor voice → Step 2: Patient speaks")
 
-    # -----------------------------
-    # Register Doctor Voice
-    # -----------------------------
     if st.button("🎙 Register Doctor Voice"):
         if temp_path:
             doctor_feat, *_ = extract_voice_features(temp_path)
@@ -141,9 +114,6 @@ with col1:
         else:
             st.warning("Provide audio first")
 
-# -----------------------------
-# Wearable
-# -----------------------------
 with col2:
     st.markdown('<div class="section">⌚ Wearable Data</div>', unsafe_allow_html=True)
 
@@ -165,9 +135,6 @@ with col2:
 
 wearable = np.array([hr, eda, act, sleep])
 
-# -----------------------------
-# Predict
-# -----------------------------
 if st.button("🔍 Predict"):
 
     if not temp_path:
@@ -176,7 +143,6 @@ if st.button("🔍 Predict"):
         try:
             voice_feat, y, sr, mfcc, pitch, energy = extract_voice_features(temp_path)
 
-            # Speaker Filter
             if os.path.exists("doctor_features.npy"):
                 doctor_feat = np.load("doctor_features.npy")
                 similarity = compute_similarity(voice_feat, doctor_feat)
@@ -190,7 +156,6 @@ if st.button("🔍 Predict"):
             pred = model.predict(final)[0]
             conf = model.predict_proba(final).max()
 
-            # Dashboard
             st.markdown("## 📊 Dashboard")
 
             c1, c2, c3 = st.columns(3)
@@ -198,7 +163,6 @@ if st.button("🔍 Predict"):
             c2.metric("Confidence", f"{conf:.2f}")
             c3.metric("HR", hr)
 
-            # Gauge
             fig = go.Figure(go.Indicator(
                 mode="gauge+number",
                 value=conf * 100,
@@ -214,7 +178,6 @@ if st.button("🔍 Predict"):
             ))
             st.plotly_chart(fig)
 
-            # Explainability
             st.markdown("## 🧠 Voice Explainability")
 
             fig_mfcc, ax = plt.subplots()
@@ -228,7 +191,6 @@ if st.button("🔍 Predict"):
             ax2.legend()
             st.pyplot(fig2)
 
-            # Insight
             st.markdown("## 🧠 AI Insight")
 
             if pred:
