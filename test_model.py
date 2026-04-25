@@ -1,4 +1,4 @@
 import joblib
 
-# after training
-joblib.dump(model, "fusion_model.pkl", compress=3)
+model = joblib.load("fusion_model.pkl")
+print(model.n_features_in_)
