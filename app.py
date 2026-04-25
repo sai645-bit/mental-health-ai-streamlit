@@ -11,9 +11,6 @@ import soundfile as sf
 st.set_page_config(page_title="AI Mental Health Monitor", layout="centered")
 st.title("🧠 AI Mental Health Monitoring System")
 
-# -----------------------------
-# Load Model
-# -----------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "fusion_model.pkl")
 
@@ -26,9 +23,6 @@ EXPECTED_FEATURES = model.n_features_in_
 
 st.write("Model expects:", EXPECTED_FEATURES)
 
-# -----------------------------
-# Feature Extraction
-# -----------------------------
 def extract_voice_features(audio_path):
     y, sr = librosa.load(audio_path, sr=None)
 
@@ -36,7 +30,7 @@ def extract_voice_features(audio_path):
     mfcc_mean = np.mean(mfcc, axis=1)
 
     pitch = librosa.yin(y, fmin=50, fmax=300)
-    pitch = np.nan_to_num(pitch)  # Fix NaN values
+    pitch = np.nan_to_num(pitch)
     pitch_mean = np.mean(pitch)
 
     energy = librosa.feature.rms(y=y)
@@ -46,20 +40,11 @@ def extract_voice_features(audio_path):
 
     return features, y, sr, mfcc, pitch, energy
 
-# -----------------------------
-# Similarity
-# -----------------------------
 def compute_similarity(f1, f2):
     return np.linalg.norm(f1 - f2)
 
-# -----------------------------
-# Layout
-# -----------------------------
 col1, col2 = st.columns(2)
 
-# -----------------------------
-# INPUT
-# -----------------------------
 with col1:
     st.subheader("🎙 Voice Input")
 
@@ -70,7 +55,6 @@ with col1:
 
     temp_path = None
 
-    # 🎙 Record
     if input_mode == "🎙 Record Voice":
         audio_bytes = st.audio_input("Record your voice")
 
@@ -78,10 +62,8 @@ with col1:
             temp_path = "temp.wav"
             with open(temp_path, "wb") as f:
                 f.write(audio_bytes.read())
-
             st.success("Recording captured")
 
-    # 📁 Upload
     elif input_mode == "📁 Upload Recording":
         audio_file = st.file_uploader(
             "Upload your voice recording",
@@ -92,10 +74,8 @@ with col1:
             temp_path = "temp.wav"
             with open(temp_path, "wb") as f:
                 f.write(audio_file.read())
-
             st.success("Audio uploaded")
 
-    # 🎧 Sample
     elif input_mode == "🎧 Sample":
         if os.path.exists("sample.wav"):
             temp_path = "sample.wav"
@@ -103,7 +83,6 @@ with col1:
         else:
             st.warning("sample.wav not found")
 
-    # Register doctor voice
     if st.button("Register Doctor Voice"):
         if temp_path:
             feat, *_ = extract_voice_features(temp_path)
@@ -112,9 +91,6 @@ with col1:
         else:
             st.warning("Please provide audio first")
 
-# -----------------------------
-# Wearable Data
-# -----------------------------
 with col2:
     st.subheader("⌚ Wearable Data")
 
@@ -125,9 +101,6 @@ with col2:
 
 wearable = np.array([hr, eda, act, sleep])
 
-# -----------------------------
-# Prediction
-# -----------------------------
 if st.button("🔍 Predict"):
 
     if not temp_path:
@@ -136,7 +109,6 @@ if st.button("🔍 Predict"):
 
     voice_feat, y, sr, mfcc, pitch, energy = extract_voice_features(temp_path)
 
-    # Speaker filter
     if os.path.exists("doctor_features.npy"):
         doctor_feat = np.load("doctor_features.npy")
         sim = compute_similarity(voice_feat, doctor_feat)
@@ -145,10 +117,8 @@ if st.button("🔍 Predict"):
             st.error("Doctor voice detected")
             st.stop()
 
-    # Combine features
     final = np.hstack((voice_feat, wearable))
 
-    # Feature alignment fix
     if len(final) > EXPECTED_FEATURES:
         final = final[:EXPECTED_FEATURES]
     elif len(final) < EXPECTED_FEATURES:
@@ -158,13 +128,9 @@ if st.button("🔍 Predict"):
 
     st.write("Final input size:", final.shape)
 
-    # Prediction
     pred = model.predict(final)[0]
     conf = model.predict_proba(final).max()
 
-    # -----------------------------
-    # Dashboard
-    # -----------------------------
     st.subheader("📊 Dashboard")
 
     c1, c2 = st.columns(2)
@@ -179,9 +145,6 @@ if st.button("🔍 Predict"):
     ))
     st.plotly_chart(fig)
 
-    # -----------------------------
-    # Explainability
-    # -----------------------------
     st.subheader("🧠 Explainability")
 
     fig_mfcc, ax = plt.subplots()
@@ -190,26 +153,17 @@ if st.button("🔍 Predict"):
     ax.set_title("MFCC Features")
     st.pyplot(fig_mfcc)
 
-    # -----------------------------
-    # Pitch + Energy Graph
-    # -----------------------------
     st.subheader("📈 Pitch & Energy Analysis")
 
     fig2, ax2 = plt.subplots()
-
     ax2.plot(pitch, label="Pitch", color="blue")
     ax2.plot(energy[0] * 100, label="Energy", color="red")
-
     ax2.set_title("Pitch and Energy Over Time")
     ax2.set_xlabel("Frames")
     ax2.set_ylabel("Value")
     ax2.legend()
-
     st.pyplot(fig2)
 
-    # -----------------------------
-    # Final Result
-    # -----------------------------
     if pred:
         st.warning("Stress detected")
     else:
