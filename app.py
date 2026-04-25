@@ -94,10 +94,34 @@ with col1:
 with col2:
     st.subheader("⌚ Wearable Data")
 
-    hr = st.slider("Heart Rate", 50, 120, 80)
-    eda = st.slider("EDA", 0.5, 5.0, 2.0)
-    act = st.slider("Activity", 500, 6000, 2500)
-    sleep = st.slider("Sleep", 3.0, 9.0, 6.5)
+    option = st.selectbox(
+        "Scenario",
+        ["Normal", "Stress", "Anxiety", "Depression", "Custom"]
+    )
+
+    if option == "Normal":
+        hr, eda, act, sleep = 72, 1.2, 3500, 7.5
+
+    elif option == "Stress":
+        hr, eda, act, sleep = 90, 2.5, 2000, 6.0
+
+    elif option == "Anxiety":
+        hr, eda, act, sleep = 100, 3.5, 1500, 5.5
+
+    elif option == "Depression":
+        hr, eda, act, sleep = 65, 1.8, 1000, 5.0
+
+    else:
+        hr = st.slider("Heart Rate", 50, 120, 80)
+        eda = st.slider("EDA", 0.5, 5.0, 2.0)
+        act = st.slider("Activity", 500, 6000, 2500)
+        sleep = st.slider("Sleep", 3.0, 9.0, 6.5)
+
+    if option != "Custom":
+        st.metric("Heart Rate", hr)
+        st.metric("EDA", eda)
+        st.metric("Activity", act)
+        st.metric("Sleep", sleep)
 
 wearable = np.array([hr, eda, act, sleep])
 
