@@ -58,17 +58,31 @@ def compute_similarity(f1, f2):
 col1, col2 = st.columns(2)
 
 # -----------------------------
-# INPUT (UPDATED - NO MIC)
+# INPUT (UPDATED WITH RECORDER)
 # -----------------------------
 with col1:
     st.subheader("🎙 Voice Input")
 
-    input_mode = st.radio("Choose Input", ["📁 Upload Recording", "🎧 Sample"])
+    input_mode = st.radio(
+        "Choose Input",
+        ["🎙 Record Voice", "📁 Upload Recording", "🎧 Sample"]
+    )
 
     temp_path = None
 
-    # Upload recording
-    if input_mode == "📁 Upload Recording":
+    # 🎙 RECORD VOICE
+    if input_mode == "🎙 Record Voice":
+        audio_bytes = st.audio_input("Record your voice")
+
+        if audio_bytes:
+            temp_path = "temp.wav"
+            with open(temp_path, "wb") as f:
+                f.write(audio_bytes.read())
+
+            st.success("Recording captured")
+
+    # 📁 Upload
+    elif input_mode == "📁 Upload Recording":
         audio_file = st.file_uploader(
             "Upload your voice recording",
             type=["wav", "mp3", "ogg"]
@@ -81,7 +95,7 @@ with col1:
 
             st.success("Audio uploaded successfully")
 
-    # Sample audio
+    # 🎧 Sample
     elif input_mode == "🎧 Sample":
         if os.path.exists("sample.wav"):
             temp_path = "sample.wav"
@@ -96,7 +110,7 @@ with col1:
             np.save("doctor_features.npy", feat)
             st.success("Doctor voice registered")
         else:
-            st.warning("Please upload audio first")
+            st.warning("Please provide audio first")
 
 # -----------------------------
 # Wearable Data
@@ -134,7 +148,7 @@ if st.button("🔍 Predict"):
     # Combine features
     final = np.hstack((voice_feat, wearable))
 
-    # Feature size fix (IMPORTANT)
+    # Feature size fix
     if len(final) > EXPECTED_FEATURES:
         final = final[:EXPECTED_FEATURES]
     elif len(final) < EXPECTED_FEATURES:
