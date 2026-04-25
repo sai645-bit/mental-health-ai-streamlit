@@ -19,12 +19,11 @@ MODEL_PATH = os.path.join(BASE_DIR, "fusion_model.pkl")
 
 @st.cache_resource
 def load_model():
-    model = joblib.load(MODEL_PATH)
-    return model
+    return joblib.load(MODEL_PATH)
 
 model = load_model()
-
 EXPECTED_FEATURES = model.n_features_in_
+
 st.write("Model expects:", EXPECTED_FEATURES)
 
 # -----------------------------
@@ -37,7 +36,8 @@ def extract_voice_features(audio_path):
     mfcc_mean = np.mean(mfcc, axis=1)
 
     pitch = librosa.yin(y, fmin=50, fmax=300)
-    pitch_mean = np.nanmean(pitch)
+    pitch = np.nan_to_num(pitch)  # Fix NaN values
+    pitch_mean = np.mean(pitch)
 
     energy = librosa.feature.rms(y=y)
     energy_mean = np.mean(energy)
@@ -58,7 +58,7 @@ def compute_similarity(f1, f2):
 col1, col2 = st.columns(2)
 
 # -----------------------------
-# INPUT (UPDATED WITH RECORDER)
+# INPUT
 # -----------------------------
 with col1:
     st.subheader("🎙 Voice Input")
@@ -70,7 +70,7 @@ with col1:
 
     temp_path = None
 
-    # 🎙 RECORD VOICE
+    # 🎙 Record
     if input_mode == "🎙 Record Voice":
         audio_bytes = st.audio_input("Record your voice")
 
@@ -93,7 +93,7 @@ with col1:
             with open(temp_path, "wb") as f:
                 f.write(audio_file.read())
 
-            st.success("Audio uploaded successfully")
+            st.success("Audio uploaded")
 
     # 🎧 Sample
     elif input_mode == "🎧 Sample":
@@ -148,7 +148,7 @@ if st.button("🔍 Predict"):
     # Combine features
     final = np.hstack((voice_feat, wearable))
 
-    # Feature size fix
+    # Feature alignment fix
     if len(final) > EXPECTED_FEATURES:
         final = final[:EXPECTED_FEATURES]
     elif len(final) < EXPECTED_FEATURES:
@@ -162,7 +162,9 @@ if st.button("🔍 Predict"):
     pred = model.predict(final)[0]
     conf = model.predict_proba(final).max()
 
+    # -----------------------------
     # Dashboard
+    # -----------------------------
     st.subheader("📊 Dashboard")
 
     c1, c2 = st.columns(2)
@@ -177,14 +179,37 @@ if st.button("🔍 Predict"):
     ))
     st.plotly_chart(fig)
 
+    # -----------------------------
     # Explainability
+    # -----------------------------
     st.subheader("🧠 Explainability")
 
     fig_mfcc, ax = plt.subplots()
-    librosa.display.specshow(mfcc, ax=ax)
+    img = librosa.display.specshow(mfcc, x_axis='time', ax=ax)
+    fig_mfcc.colorbar(img, ax=ax)
+    ax.set_title("MFCC Features")
     st.pyplot(fig_mfcc)
 
-    # Final insight
+    # -----------------------------
+    # Pitch + Energy Graph
+    # -----------------------------
+    st.subheader("📈 Pitch & Energy Analysis")
+
+    fig2, ax2 = plt.subplots()
+
+    ax2.plot(pitch, label="Pitch", color="blue")
+    ax2.plot(energy[0] * 100, label="Energy", color="red")
+
+    ax2.set_title("Pitch and Energy Over Time")
+    ax2.set_xlabel("Frames")
+    ax2.set_ylabel("Value")
+    ax2.legend()
+
+    st.pyplot(fig2)
+
+    # -----------------------------
+    # Final Result
+    # -----------------------------
     if pred:
         st.warning("Stress detected")
     else:
