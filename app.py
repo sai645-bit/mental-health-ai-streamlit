@@ -21,6 +21,9 @@ def load_model():
 model = load_model()
 EXPECTED_FEATURES = model.n_features_in_
 
+if "history" not in st.session_state:
+    st.session_state.history = []
+
 st.write("Model expects:", EXPECTED_FEATURES)
 
 def extract_voice_features(audio_path):
@@ -57,29 +60,30 @@ with col1:
 
     if input_mode == "🎙 Record Voice":
         audio_bytes = st.audio_input("Record your voice")
-
         if audio_bytes:
             temp_path = "temp.wav"
             with open(temp_path, "wb") as f:
                 f.write(audio_bytes.read())
             st.success("Recording captured")
+            st.audio(temp_path)
 
     elif input_mode == "📁 Upload Recording":
         audio_file = st.file_uploader(
             "Upload your voice recording",
             type=["wav", "mp3", "ogg"]
         )
-
         if audio_file:
             temp_path = "temp.wav"
             with open(temp_path, "wb") as f:
                 f.write(audio_file.read())
             st.success("Audio uploaded")
+            st.audio(temp_path)
 
     elif input_mode == "🎧 Sample":
         if os.path.exists("sample.wav"):
             temp_path = "sample.wav"
             st.info("Using sample audio")
+            st.audio(temp_path)
         else:
             st.warning("sample.wav not found")
 
@@ -101,16 +105,12 @@ with col2:
 
     if option == "Normal":
         hr, eda, act, sleep = 72, 1.2, 3500, 7.5
-
     elif option == "Stress":
         hr, eda, act, sleep = 90, 2.5, 2000, 6.0
-
     elif option == "Anxiety":
         hr, eda, act, sleep = 100, 3.5, 1500, 5.5
-
     elif option == "Depression":
         hr, eda, act, sleep = 65, 1.8, 1000, 5.0
-
     else:
         hr = st.slider("Heart Rate", 50, 120, 80)
         eda = st.slider("EDA", 0.5, 5.0, 2.0)
@@ -136,7 +136,6 @@ if st.button("🔍 Predict"):
     if os.path.exists("doctor_features.npy"):
         doctor_feat = np.load("doctor_features.npy")
         sim = compute_similarity(voice_feat, doctor_feat)
-
         if sim < 50:
             st.error("Doctor voice detected")
             st.stop()
@@ -150,16 +149,28 @@ if st.button("🔍 Predict"):
 
     final = final.reshape(1, -1)
 
-    st.write("Final input size:", final.shape)
-
     pred = model.predict(final)[0]
     conf = model.predict_proba(final).max()
 
+    st.session_state.history.append({
+        "Risk": "HIGH" if pred else "LOW",
+        "Confidence": float(conf)
+    })
+
     st.subheader("📊 Dashboard")
+
+    st.progress(int(conf * 100))
 
     c1, c2 = st.columns(2)
     c1.metric("Risk", "HIGH" if pred else "LOW")
     c2.metric("Confidence", f"{conf:.2f}")
+
+    if conf < 0.4:
+        st.success("Low Risk")
+    elif conf < 0.7:
+        st.warning("Moderate Risk")
+    else:
+        st.error("High Risk")
 
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
@@ -171,24 +182,28 @@ if st.button("🔍 Predict"):
 
     st.subheader("🧠 Explainability")
 
+    if hr > 90:
+        st.write("High heart rate indicates stress")
+    if np.mean(pitch) > 200:
+        st.write("High pitch variation detected")
+    if np.mean(energy) > 0.1:
+        st.write("High voice energy detected")
+
     fig_mfcc, ax = plt.subplots()
     img = librosa.display.specshow(mfcc, x_axis='time', ax=ax)
     fig_mfcc.colorbar(img, ax=ax)
-    ax.set_title("MFCC Features")
     st.pyplot(fig_mfcc)
 
     st.subheader("📈 Pitch & Energy Analysis")
 
     fig2, ax2 = plt.subplots()
-    ax2.plot(pitch, label="Pitch", color="blue")
-    ax2.plot(energy[0] * 100, label="Energy", color="red")
-    ax2.set_title("Pitch and Energy Over Time")
-    ax2.set_xlabel("Frames")
-    ax2.set_ylabel("Value")
+    ax2.plot(pitch, label="Pitch")
+    ax2.plot(energy[0] * 100, label="Energy")
     ax2.legend()
     st.pyplot(fig2)
 
-    if pred:
-        st.warning("Stress detected")
-    else:
-        st.success("Normal")
+    st.subheader("📜 Prediction History")
+    st.write(st.session_state.history)
+
+    report = f"Risk: {'HIGH' if pred else 'LOW'}\nConfidence: {conf}"
+    st.download_button("Download Report", report, file_name="report.txt")
